@@ -8,7 +8,7 @@ const Footer = () => {
           {/* Brand */}
           <div>
             <h3 className="text-2xl font-bold bg-gradient-hero bg-clip-text text-transparent mb-4">
-              Reeb AI
+              Agentic REEB AI
             </h3>
             <p className="text-muted-foreground">
               Next-generation AI receptionist solution for modern businesses
@@ -49,7 +49,7 @@ const Footer = () => {
         </div>
 
         <div className="mt-8 pt-8 border-t border-border text-center text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} Reeb AI. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} Agentic REEB AI. All rights reserved.</p>
         </div>
       </div>
     </footer>

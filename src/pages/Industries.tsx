@@ -89,7 +89,7 @@ const Industries = () => {
               Industries We Serve
             </h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-              Reeb AI adapts to the unique needs of various industries, delivering
+              Agentic REEB AI adapts to the unique needs of various industries, delivering
               tailored solutions that enhance operations and client experiences.
             </p>
           </div>
@@ -155,7 +155,7 @@ const Industries = () => {
               Don't See Your Industry?
             </h2>
             <p className="text-xl text-muted-foreground mb-6 max-w-2xl mx-auto">
-              Reeb AI is highly customizable and can be adapted to meet the specific
+              Agentic REEB AI is highly customizable and can be adapted to meet the specific
               needs of any business that requires intelligent reception management.
             </p>
             <a href="/contact" className="inline-block">

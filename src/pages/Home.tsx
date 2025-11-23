@@ -34,7 +34,7 @@ const Home = () => {
               </span>
             </h1>
             <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-              Handle unlimited calls, recognize clients instantly, and revolutionize your reception with Reeb AI's intelligent automation system.
+              Handle unlimited calls, recognize clients instantly, and revolutionize your reception with Agentic REEB AI's intelligent automation system.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <NavLink to="/contact">
@@ -130,10 +130,10 @@ const Home = () => {
 
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {[
-              {
+                {
                 step: "1",
                 title: "Connect",
-                description: "Integrate Reeb AI with your existing phone and security systems",
+                description: "Integrate Agentic REEB AI with your existing phone and security systems",
               },
               {
                 step: "2",
@@ -164,7 +164,7 @@ const Home = () => {
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
               <h2 className="text-4xl font-bold mb-6">
-                Why Choose Reeb AI?
+                Why Choose Agentic REEB AI?
               </h2>
               <div className="space-y-6">
                 {[
@@ -221,7 +221,7 @@ const Home = () => {
             Ready to Transform Your Reception?
           </h2>
           <p className="text-xl text-primary-foreground/90 mb-8 max-w-2xl mx-auto">
-            Join leading hotels and workplaces using Reeb AI to deliver exceptional client experiences
+            Join leading hotels and workplaces using Agentic REEB AI to deliver exceptional client experiences
           </p>
           <NavLink to="/contact">
             <Button size="lg" variant="secondary" className="group">
