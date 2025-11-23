@@ -15,7 +15,7 @@ const About = () => {
             <h1 className="text-5xl font-bold mb-6">
               About
               <span className="block bg-gradient-hero bg-clip-text text-transparent">
-                Reeb AI
+                Agentic REEB AI
               </span>
             </h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
@@ -60,7 +60,7 @@ const About = () => {
             <div className="text-center mb-12">
               <h2 className="text-4xl font-bold mb-4">Leadership Team</h2>
               <p className="text-xl text-muted-foreground">
-                Meet the visionaries behind Reeb AI
+                Meet the visionaries behind Agentic REEB AI
               </p>
             </div>
 

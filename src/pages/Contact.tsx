@@ -150,7 +150,7 @@ const Contact = () => {
               </Card>
 
               <div className="bg-gradient-accent rounded-2xl p-8">
-                <h3 className="text-xl font-bold mb-4">Why Choose Reeb AI?</h3>
+                <h3 className="text-xl font-bold mb-4">Why Choose Agentic REEB AI?</h3>
                 <ul className="space-y-3">
                   {[
                     "Industry-leading AI technology",

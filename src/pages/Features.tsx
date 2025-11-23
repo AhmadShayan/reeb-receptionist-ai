@@ -99,7 +99,7 @@ const Features = () => {
               </span>
             </h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-              Reeb AI combines cutting-edge artificial intelligence with practical business solutions
+              Agentic REEB AI combines cutting-edge artificial intelligence with practical business solutions
               to transform how you handle client interactions.
             </p>
           </div>
