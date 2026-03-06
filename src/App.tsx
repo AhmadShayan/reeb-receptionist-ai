@@ -8,6 +8,9 @@ import Features from "./pages/Features";
 import Industries from "./pages/Industries";
 import About from "./pages/About";
 import Contact from "./pages/Contact";
+import Demo from "./pages/Demo";
+import Admin from "./pages/Admin";
+import RegisterClient from "./pages/RegisterClient";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,7 +27,9 @@ const App = () => (
           <Route path="/industries" element={<Industries />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="/demo" element={<Demo />} />
+          <Route path="/admin" element={<Admin />} />
+          <Route path="/register-client" element={<RegisterClient />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

@@ -1,4 +1,4 @@
-import { ArrowRight, Phone, Users, Zap, Shield } from "lucide-react";
+import { ArrowRight, Phone, Users, Zap, Shield, Scan } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
@@ -37,14 +37,20 @@ const Home = () => {
               Handle unlimited calls, recognize clients instantly, and revolutionize your reception with Agentic REEB AI's intelligent automation system.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <NavLink to="/contact">
+              <NavLink to="/demo">
                 <Button size="lg" className="group">
-                  Get Started
+                  <Scan className="mr-2 w-5 h-5" />
+                  Try Live Demo
                   <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </NavLink>
-              <NavLink to="/features">
+              <NavLink to="/contact">
                 <Button size="lg" variant="outline">
+                  Get Started
+                </Button>
+              </NavLink>
+              <NavLink to="/features">
+                <Button size="lg" variant="ghost">
                   Learn More
                 </Button>
               </NavLink>
