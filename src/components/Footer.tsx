@@ -1,4 +1,5 @@
 import { Mail, Phone, MapPin } from "lucide-react";
+import logoIcon from "@/assets/logo-icon.png";
 
 const Footer = () => {
   return (
@@ -7,9 +8,12 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Brand */}
           <div>
-            <h3 className="text-2xl font-bold bg-gradient-hero bg-clip-text text-transparent mb-4">
-              Agentic REEB AI
-            </h3>
+            <div className="flex items-center gap-2 mb-4">
+              <img src={logoIcon} alt="Agentic REEB AI" className="w-8 h-8" />
+              <h3 className="text-2xl font-bold bg-gradient-hero bg-clip-text text-transparent">
+                Agentic REEB AI
+              </h3>
+            </div>
             <p className="text-muted-foreground">
               Next-generation AI receptionist solution for modern businesses
             </p>
