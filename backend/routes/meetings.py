@@ -5,6 +5,7 @@ Full CRUD for scheduled meetings.
 The AI chat route also uses book_meeting() directly when Claude triggers scheduling.
 """
 
+import os
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -75,12 +76,15 @@ def create_meeting(data: MeetingCreate, db: Session = Depends(get_db)):
         if client and client.email:
             client_email = client.email
 
+    # Default host email to RECEPTIONIST_EMAIL so owner always receives confirmation
+    host_email = data.host_email or os.getenv("RECEPTIONIST_EMAIL")
+
     meeting = Meeting(
         client_id=data.client_id,
         client_name=data.client_name,
         client_email=client_email,
         host_name=data.host_name,
-        host_email=data.host_email,
+        host_email=host_email,
         date=data.date,
         time=data.time,
         duration=data.duration,

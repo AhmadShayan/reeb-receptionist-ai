@@ -2,6 +2,7 @@ import re
 import json
 import uuid
 import logging
+import os
 from fastapi import APIRouter, Depends, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -32,12 +33,15 @@ def _try_book_meeting(raw_json: str, client_id: Optional[int], client_name: str,
         if cl:
             client_email = cl.email
 
+    # Use RECEPTIONIST_EMAIL as fallback host email so the owner always gets notified
+    host_email = data.get("host_email") or os.getenv("RECEPTIONIST_EMAIL")
+
     meeting = Meeting(
         client_id=client_id,
         client_name=client_name,
         client_email=client_email,
         host_name=data.get("host", "Staff Member"),
-        host_email=data.get("host_email"),
+        host_email=host_email,
         date=data.get("date", "TBD"),
         time=data.get("time", "TBD"),
         duration=int(data.get("duration", 30)),

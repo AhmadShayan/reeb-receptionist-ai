@@ -137,8 +137,12 @@ def send_meeting_confirmation(
 ) -> dict:
     """
     Send confirmation emails to both the visitor and the host.
-    Returns a dict with send status for each recipient.
+    Falls back to RECEPTIONIST_EMAIL for the host if no host_email provided.
+    Always sends to both sides, even if it's the same address.
     """
+    # Use RECEPTIONIST_EMAIL as fallback for host
+    resolved_host_email = host_email or os.getenv("RECEPTIONIST_EMAIL")
+
     html = _meeting_card_html(meeting_id, client_name, host_name, date, time, duration, purpose)
     subject = f"Meeting Confirmed — {client_name} & {host_name} on {date} at {time}"
 
@@ -147,8 +151,9 @@ def send_meeting_confirmation(
     if client_email and "@" in client_email:
         results["visitor_email_sent"] = _send_email(client_email, subject, html)
 
-    if host_email and "@" in host_email and host_email != client_email:
-        results["host_email_sent"] = _send_email(host_email, subject, html)
+    # Always send to host — even if same address as visitor (they need both confirmations)
+    if resolved_host_email and "@" in resolved_host_email:
+        results["host_email_sent"] = _send_email(resolved_host_email, subject, html)
 
     return results
 
