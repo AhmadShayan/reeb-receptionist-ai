@@ -44,6 +44,22 @@ export interface ChatResponse {
   client_name: string | null;
 }
 
+export interface Meeting {
+  id: number;
+  client_id: number | null;
+  client_name: string;
+  client_email: string | null;
+  host_name: string;
+  host_email: string | null;
+  date: string;      // YYYY-MM-DD
+  time: string;      // HH:MM
+  duration: number;  // minutes
+  purpose: string | null;
+  status: "scheduled" | "cancelled" | "completed";
+  notes: string | null;
+  created_at: string | null;
+}
+
 export interface AdminStats {
   total_clients: number;
   total_visits: number;
@@ -123,6 +139,23 @@ export const adminApi = {
   getStats: () => api.get<AdminStats>("/api/admin/stats").then((r) => r.data),
   getVisits: (limit = 100) =>
     api.get(`/api/admin/visits?limit=${limit}`).then((r) => r.data),
+};
+
+// ─── Meetings API ─────────────────────────────────────────────────────────────
+
+export const meetingsApi = {
+  list: (status?: string) =>
+    api.get<Meeting[]>(`/api/meetings/${status ? `?status=${status}` : ""}`).then((r) => r.data),
+  create: (data: Partial<Meeting>) =>
+    api.post<Meeting & { email: Record<string, boolean> }>("/api/meetings/", data).then((r) => r.data),
+  updateStatus: (id: number, status: string) =>
+    api.patch<Meeting>(`/api/meetings/${id}/status`, { status }).then((r) => r.data),
+  delete: (id: number) =>
+    api.delete(`/api/meetings/${id}`).then((r) => r.data),
+  checkAvailability: (date: string, time: string, hostName: string, duration = 30) =>
+    api.get<{ available: boolean; message: string; conflict?: Meeting }>(
+      `/api/meetings/availability?date=${date}&time=${time}&host_name=${encodeURIComponent(hostName)}&duration=${duration}`
+    ).then((r) => r.data),
 };
 
 export default api;

@@ -5,8 +5,8 @@ import Footer from "@/components/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { adminApi, clientsApi, contactApi, chatApi, API_BASE } from "@/api/apiClient";
-import type { Client, AdminStats } from "@/api/apiClient";
+import { adminApi, clientsApi, contactApi, chatApi, meetingsApi, API_BASE } from "@/api/apiClient";
+import type { Client, AdminStats, Meeting } from "@/api/apiClient";
 import {
   Users,
   Activity,
@@ -23,6 +23,10 @@ import {
   Building2,
   Phone,
   User,
+  CalendarDays,
+  CheckCircle2,
+  XCircle,
+  CalendarCheck,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 
@@ -55,7 +59,7 @@ const StatCard = ({
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
-type Tab = "overview" | "clients" | "messages" | "chat";
+type Tab = "overview" | "clients" | "messages" | "chat" | "calendar";
 
 // ─── Admin Page ───────────────────────────────────────────────────────────────
 
@@ -65,6 +69,7 @@ const Admin = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
   const [chatLogs, setChatLogs] = useState<any[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,16 +77,18 @@ const Admin = () => {
     setLoading(true);
     setError(null);
     try {
-      const [s, c, m, cl] = await Promise.all([
+      const [s, c, m, cl, mt] = await Promise.all([
         adminApi.getStats(),
         clientsApi.list(),
         contactApi.list(),
         chatApi.getLogs(50),
+        meetingsApi.list(),
       ]);
       setStats(s);
       setClients(c);
       setMessages(m);
       setChatLogs(cl);
+      setMeetings(mt);
     } catch {
       setError("Cannot connect to backend. Make sure the server is running on port 8000.");
     } finally {
@@ -104,9 +111,21 @@ const Admin = () => {
     setMessages((prev) => prev.filter((m) => m.id !== id));
   };
 
+  const handleMeetingStatus = async (id: number, status: string) => {
+    const updated = await meetingsApi.updateStatus(id, status);
+    setMeetings((prev) => prev.map((m) => (m.id === id ? updated : m)));
+  };
+
+  const handleDeleteMeeting = async (id: number) => {
+    if (!confirm("Delete this meeting? This cannot be undone.")) return;
+    await meetingsApi.delete(id);
+    setMeetings((prev) => prev.filter((m) => m.id !== id));
+  };
+
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "overview", label: "Overview", icon: <TrendingUp className="w-4 h-4" /> },
     { key: "clients", label: "Clients", icon: <Users className="w-4 h-4" /> },
+    { key: "calendar", label: "Calendar", icon: <CalendarDays className="w-4 h-4" /> },
     { key: "messages", label: "Messages", icon: <Mail className="w-4 h-4" /> },
     { key: "chat", label: "Chat Logs", icon: <MessageSquare className="w-4 h-4" /> },
   ];
@@ -167,6 +186,11 @@ const Admin = () => {
                 {t.key === "clients" && clients.length > 0 && (
                   <Badge className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs bg-primary/20 text-primary border-0">
                     {clients.length}
+                  </Badge>
+                )}
+                {t.key === "calendar" && meetings.filter((m) => m.status === "scheduled").length > 0 && (
+                  <Badge className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs bg-violet-500/20 text-violet-600 border-0">
+                    {meetings.filter((m) => m.status === "scheduled").length}
                   </Badge>
                 )}
                 {t.key === "messages" && messages.length > 0 && (
@@ -347,6 +371,120 @@ const Admin = () => {
                       </CardContent>
                     </Card>
                   ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── CALENDAR TAB ─────────────────────────────────────────────── */}
+          {tab === "calendar" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-muted-foreground text-sm">
+                  {meetings.filter((m) => m.status === "scheduled").length} upcoming ·{" "}
+                  {meetings.length} total
+                </p>
+              </div>
+
+              {meetings.length === 0 ? (
+                <Card className="border-border border-dashed">
+                  <CardContent className="py-16 text-center">
+                    <CalendarDays className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
+                    <p className="font-medium text-muted-foreground">No meetings scheduled yet.</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Visitors can schedule meetings through the AI chat on the Demo page.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {meetings.map((m) => {
+                    const statusColor =
+                      m.status === "scheduled"
+                        ? "bg-violet-500/20 text-violet-600 border-violet-500/30"
+                        : m.status === "completed"
+                        ? "bg-green-500/20 text-green-600 border-green-500/30"
+                        : "bg-red-500/20 text-red-500 border-red-500/30";
+
+                    return (
+                      <Card key={m.id} className={`border-border ${m.status === "cancelled" ? "opacity-60" : ""}`}>
+                        <CardContent className="p-5">
+                          <div className="flex items-start justify-between gap-4 flex-wrap">
+                            <div className="flex items-start gap-3 flex-1 min-w-0">
+                              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                                <CalendarCheck className="w-5 h-5 text-primary" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap mb-1">
+                                  <span className="font-semibold text-sm">{m.client_name}</span>
+                                  <span className="text-muted-foreground text-xs">→</span>
+                                  <span className="font-semibold text-sm text-primary">{m.host_name}</span>
+                                  <Badge className={`text-xs ml-auto ${statusColor}`}>
+                                    {m.status}
+                                  </Badge>
+                                </div>
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                                  <span className="flex items-center gap-1">
+                                    <CalendarDays className="w-3 h-3" />
+                                    {m.date}
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    {m.time} · {m.duration} min
+                                  </span>
+                                  {m.client_email && (
+                                    <span className="flex items-center gap-1">
+                                      <Mail className="w-3 h-3" />
+                                      {m.client_email}
+                                    </span>
+                                  )}
+                                </div>
+                                {m.purpose && (
+                                  <p className="text-xs text-foreground bg-secondary/40 rounded-md px-2 py-1 mt-2 inline-block">
+                                    {m.purpose}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Action buttons */}
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {m.status === "scheduled" && (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-green-600 hover:text-green-700 hover:bg-green-500/10 border-green-500/30"
+                                    onClick={() => handleMeetingStatus(m.id, "completed")}
+                                  >
+                                    <CheckCircle2 className="w-3 h-3 mr-1" />
+                                    Done
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-red-500 hover:text-red-600 hover:bg-red-500/10 border-red-500/30"
+                                    onClick={() => handleMeetingStatus(m.id, "cancelled")}
+                                  >
+                                    <XCircle className="w-3 h-3 mr-1" />
+                                    Cancel
+                                  </Button>
+                                </>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-muted-foreground hover:text-red-500"
+                                onClick={() => handleDeleteMeeting(m.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </div>

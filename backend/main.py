@@ -2,7 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from database import engine, Base
-from routes import clients, recognize, chat, contact, admin
+from routes import clients, recognize, chat, contact, admin, meetings
+from dotenv import load_dotenv
+load_dotenv()
 import os
 
 Base.metadata.create_all(bind=engine)
@@ -31,6 +33,7 @@ app.include_router(recognize.router, prefix="/api/recognize", tags=["recognition
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(contact.router, prefix="/api/contact", tags=["contact"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(meetings.router, prefix="/api/meetings", tags=["meetings"])
 
 
 @app.get("/")

@@ -1,13 +1,22 @@
 """
 AI Receptionist Service
 -----------------------
-Uses Claude API if ANTHROPIC_API_KEY is set in .env,
-otherwise falls back to a sophisticated rule-based engine
-that mimics a professional AI receptionist convincingly.
+Uses Claude API (claude-sonnet-4-6) for natural, human-like responses.
+Falls back to a sophisticated rule-based engine if API is unavailable.
+
+Scheduling Flow:
+  When Claude decides to book a meeting it appends a structured marker to its
+  response:  [SCHEDULE:{"host":"...","date":"YYYY-MM-DD","time":"HH:MM",...}]
+
+  The chat route strips this marker, books the meeting in the DB, sends emails,
+  and returns the clean conversational reply to the visitor.
 """
 
 import os
+import re
+import json
 import random
+from datetime import date
 from typing import Optional, List, Dict
 
 try:
@@ -17,205 +26,169 @@ except ImportError:
     ANTHROPIC_AVAILABLE = False
 
 
-SYSTEM_PROMPT = """You are REEB, an advanced AI receptionist for Agentic REEB AI.
-You are professional, friendly, and helpful. You assist visitors with:
-- Checking in and directing them to the right department
-- Answering questions about the facility
-- Taking messages for staff
-- Confirming appointments
-- Providing general information
+# ─── System Prompt ────────────────────────────────────────────────────────────
 
-Keep responses concise (2-4 sentences max), warm, and professional.
-If a client has been recognized by name, use their name naturally in your response.
-Never break character. You are a real AI receptionist."""
+def _build_system_prompt(client_name: Optional[str] = None) -> str:
+    today = date.today().isoformat()
+    visitor_line = f"The visitor you're currently talking to is {client_name}, who our system has already recognized." if client_name else ""
 
+    return f"""You are REEB — the AI receptionist at Agentic REEB AI headquarters.
+
+Your personality: warm, professional, and genuinely helpful. You sound like a real person at a front desk — friendly and conversational, never robotic or corporate. Use natural language. Short sentences work great. You can be a little witty when appropriate.
+
+{visitor_line}
+
+Today is {today}. Office hours: Monday–Friday, 9 AM – 6 PM.
+
+What you can help with:
+- Welcoming visitors and answering questions about the facility
+- Giving directions to departments, meeting rooms, amenities (parking, cafeteria, WiFi, restrooms)
+- Checking people in and notifying staff
+- **Scheduling meetings** — see below
+
+MEETING SCHEDULING:
+When a visitor wants to schedule a meeting or says they have an appointment, naturally collect these four things through conversation:
+1. Who they want to meet (person's name or department)
+2. Date they prefer (convert casual dates like "tomorrow" or "next Monday" to YYYY-MM-DD)
+3. Time (convert to HH:MM in 24-hour format)
+4. Brief purpose or agenda
+
+Once you have all four confirmed, end your message with EXACTLY this marker on a new line (no spaces around it):
+[SCHEDULE:{{"host":"<name>","date":"<YYYY-MM-DD>","time":"<HH:MM>","duration":30,"purpose":"<text>"}}]
+
+Example — if visitor says they want to meet Dr. Khan tomorrow at 2pm about a project review:
+[SCHEDULE:{{"host":"Dr. Khan","date":"2025-03-09","time":"14:00","duration":30,"purpose":"Project review"}}]
+
+IMPORTANT RULES:
+- Never say "As an AI" or "I'm just a language model" — you are REEB, the receptionist
+- Don't use excessive filler phrases like "Certainly!", "Absolutely!", "Of course!" — just be natural
+- Keep responses concise — 1–3 sentences for most replies
+- If someone mentions an emergency (fire, medical), tell them to call emergency services immediately and alert security
+- Use the visitor's name naturally when you know it (not every sentence, just occasionally)
+- Don't make up specific room numbers or staff schedules you don't know — offer to check or connect them with someone"""
+
+
+# ─── Rule-based fallback ──────────────────────────────────────────────────────
 
 class RuleBasedReceptionist:
-    """Sophisticated rule-based AI that mimics a real AI receptionist."""
+    """Fallback when Claude API is unavailable."""
 
-    GREETINGS_RESPONSES = [
-        "Hello{name_part}! Welcome to Agentic REEB AI. How may I assist you today?",
-        "Good {time_of_day}{name_part}! I'm REEB, your AI receptionist. How can I help you?",
-        "Welcome{name_part}! It's great to see you. What can I do for you today?",
-        "Hi there{name_part}! I'm REEB. How can I make your visit more comfortable?",
+    GREETINGS = [
+        "Hey{n}! Welcome to Agentic REEB AI. What can I help you with today?",
+        "Hi{n}! I'm REEB, the front desk AI. How can I make your visit easier?",
+        "Good {tod}{n}! What brings you in today?",
     ]
-
-    MEETING_RESPONSES = [
-        "Of course! I'll let {person} know you've arrived{name_part}. Please take a seat in our waiting area — they'll be with you shortly.",
-        "I'll notify {person} of your arrival right away{name_part}. Our waiting area is just to your left. Can I get you anything while you wait?",
-        "I'm sending a notification to {person} now. Please make yourself comfortable{name_part} — estimated wait is just a few minutes.",
-        "I've alerted {person} that you're here{name_part}. Please proceed to the waiting lounge on the second floor.",
+    FAREWELLS = [
+        "Take care{n}! Hope to see you again soon.",
+        "Have a great day{n}! Don't hesitate to swing by if you need anything.",
+        "Goodbye{n}! Safe travels.",
     ]
+    HELP = [
+        "Happy to help! I can give you directions, notify staff that you're here, confirm appointments, or help schedule a meeting. What do you need?",
+        "I've got you covered — directions, check-ins, scheduling, or general questions. What's on your mind?",
+    ]
+    THANKS = [
+        "No problem at all{n}! Anything else I can do for you?",
+        "Happy to help{n}! Let me know if there's anything else.",
+    ]
+    UNKNOWN = [
+        "Let me connect you with the right person for that. Which department are you looking for?",
+        "Good question — I want to make sure you get the right help. Can you give me a bit more detail?",
+        "I'll do my best! For that kind of request, it might be worth speaking with one of our staff directly. Want me to notify someone?",
+    ]
+    EMERGENCY = "Please call emergency services (911) immediately! I'm alerting building security right now. Evacuate via the nearest green exit sign."
 
-    DIRECTION_RESPONSES = {
-        "reception": "The main reception desk is right in front of you! Is there anything specific you need help with?",
-        "bathroom|restroom|toilet": "The restrooms are down the hallway to your right, just past the elevator.",
-        "elevator|lift": "The elevators are located at the end of the main corridor, straight ahead from the entrance.",
-        "parking|park": "Visitor parking is available in Lot B, on the east side of the building. Parking is free for the first 2 hours.",
-        "cafeteria|cafe|food|lunch|eat": "Our cafeteria is on the ground floor, Building A. It's open 7 AM to 7 PM on weekdays.",
-        "wifi|internet|password": "Our guest WiFi is 'REEB-Guest' and the password is 'Welcome2024'. Is there anything else you need?",
-        "exit|way out": "The main exit is through the lobby behind you. Have a wonderful day!",
+    DIRECTIONS = {
+        "bathroom|restroom|toilet|washroom": "Restrooms are down the hallway to your right, just past the elevator.",
+        "elevator|lift": "Elevators are at the end of the main corridor, straight ahead.",
+        "parking|park": "Visitor parking is in Lot B, east side of the building — free for the first 2 hours.",
+        "cafeteria|cafe|coffee|food|lunch|eat|canteen": "Cafeteria is on the ground floor, Building A. Open 7 AM – 7 PM weekdays.",
+        "wifi|internet|password|network": "Guest WiFi: REEB-Guest · Password: Welcome2024",
+        "exit|way out|leave": "Main exit is through the lobby behind you. Have a great day!",
+        "reception|front desk": "You're here! This is the main reception. What do you need?",
     }
 
-    APPOINTMENT_RESPONSES = [
-        "I can see your appointment details{name_part}. You're scheduled for {time}. Please proceed to Conference Room {room} on the {floor} floor.",
-        "Your appointment is confirmed{name_part}! Head to the {floor} floor and check in at reception — they're expecting you.",
-        "I have your appointment on file{name_part}. Please sign in at the kiosk to your right, and someone will escort you shortly.",
-    ]
+    DEPARTMENTS = {
+        "hr|human resources": "HR is on Floor 3, Room 301. Want me to let them know you're on your way?",
+        "it support|tech support|technical": "IT Support is in the basement, Lab 01. I can call ahead if you'd like.",
+        "finance|accounting": "Finance is on Floor 4, right around the corner from the elevators.",
+        "management|executive|ceo|director": "Executive offices are on the top floor via the exec elevator on the left.",
+        "security|guard": "Security is stationed at the main entrance — I can alert them right away.",
+    }
 
-    HELP_RESPONSES = [
-        "I can help you with: directions around the building, notifying staff of your arrival, confirming appointments, or answering general questions. What do you need?",
-        "As your AI receptionist, I'm here to help with check-ins, directions, appointment confirmations, and more. What can I assist with today?",
-        "Sure! Here's what I can do: direct you to any department, notify staff of your arrival, confirm your appointments, or answer general questions about our facility.",
-    ]
+    def _n(self, name):
+        return f", {name}" if name else ""
 
-    FAREWELL_RESPONSES = [
-        "Thank you for visiting{name_part}! Have a wonderful day. We hope to see you again soon!",
-        "It was a pleasure assisting you{name_part}. Safe travels and goodbye!",
-        "Goodbye{name_part}! Don't hesitate to come back if you need anything. Have a great day!",
-    ]
-
-    UNKNOWN_RESPONSES = [
-        "I understand you need assistance. For complex requests, I'd recommend speaking with one of our staff members. Can I notify someone to come help you?",
-        "That's a great question! Let me connect you with the right person who can best assist with that. Which department are you looking for?",
-        "I want to make sure you get the right help. Could you clarify a bit more? Alternatively, I can notify a staff member to assist you directly.",
-        "I'm here to help! For that specific request, I'll route you to the appropriate team. May I have your name to announce your arrival?",
-    ]
-
-    RECOGNITION_WELCOME = [
-        "Welcome back, {name}! It's great to see you again. You've visited us {count} time(s) before. How can I assist you today?",
-        "Hello, {name}! I recognized you right away — welcome back! Last time you were here was {last_visit}. What brings you in today?",
-        "Great to see you again, {name}! Our records show this is visit #{count}. How can I make your experience even better today?",
-    ]
-
-    def _get_time_of_day(self) -> str:
+    def _tod(self):
         from datetime import datetime
-        hour = datetime.now().hour
-        if hour < 12:
-            return "morning"
-        elif hour < 17:
-            return "afternoon"
-        else:
-            return "evening"
+        h = datetime.now().hour
+        return "morning" if h < 12 else "afternoon" if h < 17 else "evening"
 
-    def _format_name_part(self, client_name: Optional[str], style: str = "comma") -> str:
-        if not client_name:
-            return ""
-        if style == "comma":
-            return f", {client_name}"
-        return f" {client_name}"
+    def _has(self, words, text):
+        for w in words.split("|"):
+            if re.search(r'\b' + re.escape(w.strip()) + r'\b', text):
+                return True
+        return False
+
+    def get_response(self, message: str, client_name: Optional[str] = None, **_) -> str:
+        msg = message.lower().strip()
+        n = self._n(client_name)
+
+        # Emergency — always first
+        if any(w in msg for w in ["emergency", "fire", "medical help", "heart attack", "evacuate"]) or "help!" in message:
+            return self.EMERGENCY
+
+        # Greeting
+        if self._has("hello|hi|hey|howdy|greetings|good morning|good afternoon|good evening", msg):
+            t = random.choice(self.GREETINGS)
+            return t.format(n=n, tod=self._tod())
+
+        # Farewell
+        if self._has("bye|goodbye|see you|farewell|take care|leaving", msg):
+            return random.choice(self.FAREWELLS).format(n=n)
+
+        # Thanks
+        if self._has("thank|thanks|appreciate|perfect|awesome|great", msg):
+            return random.choice(self.THANKS).format(n=n)
+
+        # Help
+        if self._has("help|assist|what can you do|options", msg):
+            return random.choice(self.HELP)
+
+        # Badge / visitor pass
+        if self._has("badge|visitor pass|access card", msg) or ("id" in msg and "need" in msg):
+            return f"I'll get you a visitor badge right away{n}. Just look at the camera — it'll only take a second."
+
+        # Scheduling
+        if self._has("schedule|meeting|appointment|book|reserve", msg):
+            return f"Of course{n}! I can schedule that for you. Who would you like to meet with, and when are you thinking?"
+
+        # Directions
+        for pattern, response in self.DIRECTIONS.items():
+            if self._has(pattern, msg):
+                return response
+
+        # Departments
+        for pattern, response in self.DEPARTMENTS.items():
+            if self._has(pattern, msg):
+                return response
+
+        # Delivery
+        if self._has("delivery|package|courier|parcel|drop off", msg):
+            return "For deliveries, head to the loading dock at the rear of the building. I'll let the receiving team know you're coming."
+
+        return random.choice(self.UNKNOWN)
 
     def get_recognition_greeting(self, client_name: str, visit_count: int, last_visit: str) -> str:
-        template = random.choice(self.RECOGNITION_WELCOME)
-        return template.format(name=client_name, count=visit_count, last_visit=last_visit)
+        templates = [
+            f"Welcome back, {client_name}! Good to see you again — visit number {visit_count}. How can I help you today?",
+            f"Hey {client_name}! I recognized you right away. You were last here {last_visit}. What brings you in?",
+            f"Great to see you, {client_name}! This is visit #{visit_count} — you're basically a regular now. What can I do for you?",
+        ]
+        return random.choice(templates)
 
-    def _word_in(self, word: str, text: str) -> bool:
-        """Check if `word` appears as a whole word (or phrase) in `text`."""
-        import re
-        return bool(re.search(r'\b' + re.escape(word) + r'\b', text))
 
-    def get_response(self, message: str, client_name: Optional[str] = None, history: Optional[List[Dict]] = None) -> str:
-        msg = message.lower().strip()
-        name_part = self._format_name_part(client_name)
-
-        # ── Emergency (MUST be checked first) ─────────────────────────────
-        if any(self._word_in(w, msg) for w in ["emergency", "fire", "medical", "alarm", "evacuat"]) or "help!" in msg:
-            return "I'm alerting security and emergency services immediately! Please stay calm. Emergency responders are on their way. Exit via the nearest emergency door marked in green."
-
-        # ── Greetings ──────────────────────────────────────────────────────
-        if any(self._word_in(w, msg) for w in ["hello", "hi", "hey", "greetings", "howdy"]) or \
-           any(p in msg for p in ["good morning", "good afternoon", "good evening"]):
-            template = random.choice(self.GREETINGS_RESPONSES)
-            return template.format(name_part=name_part, time_of_day=self._get_time_of_day())
-
-        # ── Farewells ──────────────────────────────────────────────────────
-        if any(p in msg for p in ["bye", "goodbye", "see you", "farewell", "take care"]):
-            template = random.choice(self.FAREWELL_RESPONSES)
-            return template.format(name_part=name_part)
-
-        # ── Thank you ──────────────────────────────────────────────────────
-        if any(self._word_in(w, msg) for w in ["thank", "thanks", "appreciate", "awesome", "perfect"]):
-            return f"You're very welcome{name_part}! That's what I'm here for. Is there anything else I can help you with?"
-
-        # ── ID / Badge (before generic "help") ────────────────────────────
-        if any(self._word_in(w, msg) for w in ["badge", "pass", "card", "access"]) or \
-           "visitor pass" in msg or ("id" in msg and "need" in msg):
-            return f"I'll issue you a visitor badge right away{name_part}. Please look at the camera for a moment while I capture your photo for the pass. Your badge will be valid for today's visit."
-
-        # ── Meeting / arrival ──────────────────────────────────────────────
-        if any(self._word_in(w, msg) for w in ["meeting", "arrived", "arrival"]) or \
-           any(p in msg for p in ["here for", "have a meeting", "i'm here to meet", "came to see"]):
-            words = message.split()
-            person = "the relevant staff member"
-            for i, w in enumerate(words):
-                if w.lower() in ["with", "for", "meet", "see", "meeting"]:
-                    if i + 1 < len(words):
-                        person = " ".join(words[i+1:i+3]).strip(".,!?")
-                        break
-            template = random.choice(self.MEETING_RESPONSES)
-            return template.format(person=person, name_part=name_part)
-
-        # ── Appointment confirmation ────────────────────────────────────────
-        if any(self._word_in(w, msg) for w in ["confirm", "scheduled", "booked", "slot"]) or \
-           "appointment" in msg:
-            rooms = ["3A", "4B", "2C", "5D", "1A"]
-            floors = ["second", "third", "fourth", "ground"]
-            template = random.choice(self.APPOINTMENT_RESPONSES)
-            return template.format(
-                name_part=name_part,
-                time="your scheduled time",
-                room=random.choice(rooms),
-                floor=random.choice(floors),
-            )
-
-        # ── Directions ─────────────────────────────────────────────────────
-        for keyword_group, response in self.DIRECTION_RESPONSES.items():
-            keywords = keyword_group.split("|")
-            if any(self._word_in(k, msg) for k in keywords):
-                return response
-
-        # ── Department queries (use whole-word matching to avoid false hits) ─
-        departments = {
-            "hr": "The HR department is on Floor 3, Room 301. Shall I notify them you're on your way?",
-            "human resources": "The HR department is on Floor 3, Room 301. Shall I notify them you're on your way?",
-            "tech support": "IT Support is located in the basement level, Lab 01. I can call ahead for you if you'd like.",
-            "technical": "IT Support is located in the basement level, Lab 01. I can call ahead for you if you'd like.",
-            "finance": "The Finance department is on Floor 4. Head to the elevators and they're right around the corner.",
-            "accounting": "The Finance department is on Floor 4. Head to the elevators and they're right around the corner.",
-            "management": "Executive offices are on the top floor, accessible via the executive elevator on the left.",
-            "ceo": "Executive offices are on the top floor, accessible via the executive elevator on the left.",
-            "director": "Executive offices are on the top floor, accessible via the executive elevator on the left.",
-            "security": "Security is stationed at the main entrance. I can alert them immediately if needed.",
-            "guard": "Security is stationed at the main entrance. I can alert them immediately if needed.",
-        }
-        # "IT" department — must be a standalone word, not part of "visitor", "visit", etc.
-        if self._word_in("it", msg) and any(kw in msg for kw in ["it department", "it support", "it desk", "it help"]):
-            return "IT Support is located in the basement level, Lab 01. I can call ahead for you if you'd like."
-        for keyword, response in departments.items():
-            if keyword in msg and keyword != "it":  # "it" handled above
-                return response
-
-        # ── Delivery ───────────────────────────────────────────────────────
-        if any(self._word_in(w, msg) for w in ["delivery", "package", "courier", "parcel"]) or "drop off" in msg:
-            return "For deliveries, please proceed to the loading dock at the rear of the building. I'll notify the receiving team to meet you there."
-
-        # ── Name introduction ──────────────────────────────────────────────
-        if any(p in msg for p in ["my name is", "i am", "i'm", "call me"]):
-            words = message.split()
-            for i, w in enumerate(words):
-                if w.lower() in ["is", "am", "'m"]:
-                    if i + 1 < len(words):
-                        name = words[i + 1].strip(".,!?")
-                        return f"Nice to meet you, {name}! I've noted your name in our visitor log. How can I assist you today?"
-
-        # ── General help ───────────────────────────────────────────────────
-        if any(self._word_in(w, msg) for w in ["help", "assist", "options", "capabilities"]) or \
-           any(p in msg for p in ["what can you do", "what do you do"]):
-            return random.choice(self.HELP_RESPONSES)
-
-        # ── Default ────────────────────────────────────────────────────────
-        return random.choice(self.UNKNOWN_RESPONSES)
-
+# ─── Claude API call ──────────────────────────────────────────────────────────
 
 async def get_ai_response(
     user_message: str,
@@ -224,32 +197,30 @@ async def get_ai_response(
 ) -> str:
     api_key = os.getenv("ANTHROPIC_API_KEY")
 
-    if api_key and ANTHROPIC_AVAILABLE:
+    if api_key and ANTHROPIC_AVAILABLE and not api_key.startswith("your_"):
         try:
             client = anthropic.Anthropic(api_key=api_key)
-            messages = []
 
+            messages = []
             if conversation_history:
-                for item in conversation_history[-6:]:  # Last 6 exchanges
+                for item in conversation_history[-8:]:
                     messages.append({"role": "user", "content": item["user"]})
                     messages.append({"role": "assistant", "content": item["assistant"]})
 
-            context = user_message
-            if client_name:
-                context = f"[Recognized client: {client_name}] {user_message}"
-
-            messages.append({"role": "user", "content": context})
+            messages.append({"role": "user", "content": user_message})
 
             response = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=300,
-                system=SYSTEM_PROMPT,
+                model="claude-sonnet-4-6",
+                max_tokens=400,
+                system=_build_system_prompt(client_name),
                 messages=messages,
             )
             return response.content[0].text
-        except Exception:
-            pass  # Fall back to rule-based
+        except Exception as e:
+            # Log but don't crash — fall back to rule-based
+            import logging
+            logging.getLogger(__name__).warning("Claude API error: %s", e)
 
     # Rule-based fallback
     bot = RuleBasedReceptionist()
-    return bot.get_response(user_message, client_name, conversation_history)
+    return bot.get_response(user_message, client_name, history=conversation_history)

@@ -19,6 +19,7 @@ class Client(Base):
 
     visits = relationship("Visit", back_populates="client", cascade="all, delete-orphan")
     chat_logs = relationship("ChatLog", back_populates="client", cascade="all, delete-orphan")
+    meetings = relationship("Meeting", back_populates="client", cascade="all, delete-orphan")
 
 
 class Visit(Base):
@@ -54,3 +55,23 @@ class ContactMessage(Base):
     company = Column(String(100))
     message = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Meeting(Base):
+    __tablename__ = "meetings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)
+    client_name = Column(String(100), nullable=False)
+    client_email = Column(String(200))
+    host_name = Column(String(100), nullable=False)
+    host_email = Column(String(200))
+    date = Column(String(20), nullable=False)    # YYYY-MM-DD
+    time = Column(String(10), nullable=False)    # HH:MM (24h)
+    duration = Column(Integer, default=30)       # minutes
+    purpose = Column(Text)
+    status = Column(String(20), default="scheduled")  # scheduled / cancelled / completed
+    notes = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    client = relationship("Client", back_populates="meetings")
