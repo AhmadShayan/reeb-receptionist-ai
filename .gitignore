@@ -25,5 +25,32 @@ dist-ssr
 
 # Environment files
 .env
+.env.*
+!.env.example
 backend/.env
+backend/.env.*
+!backend/.env.example
 .env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.pyc
+
+# Database (contains personal data)
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads (contains user face photos)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Python venv
+venv/
+.venv/
+env/
+.env/
