@@ -23,6 +23,8 @@ import {
   Building2,
   Mic,
   MicOff,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -58,18 +60,35 @@ const Demo = () => {
   const [sessionId] = useState(() => `session-${Date.now()}`);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Voice input state
+  // Voice state
   const [isListening, setIsListening] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const voiceModeRef = useRef(false);
 
-  const toggleVoiceInput = () => {
+  // Keep ref in sync so callbacks see latest value
+  useEffect(() => { voiceModeRef.current = voiceMode; }, [voiceMode]);
+
+  const speak = (text: string) => {
+    window.speechSynthesis.cancel();
+    // Strip URLs from spoken text
+    const clean = text.replace(/https?:\/\/[^\s]+/g, "You can find the link in the chat.");
+    const utterance = new SpeechSynthesisUtterance(clean);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      // In voice mode, auto-restart listening after bot finishes speaking
+      if (voiceModeRef.current) startListening();
+    };
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const startListening = () => {
     const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
-
-    if (isListening) {
-      recognitionRef.current?.stop();
-      return;
-    }
 
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
@@ -82,10 +101,31 @@ const Demo = () => {
     recognition.onresult = (e) => {
       const transcript = e.results[0][0].transcript;
       setInputText(transcript);
+      // In voice mode auto-send immediately
+      if (voiceModeRef.current) {
+        sendMessageWithText(transcript);
+      }
     };
 
     recognitionRef.current = recognition;
     recognition.start();
+  };
+
+  const toggleVoiceInput = () => {
+    if (isListening) { recognitionRef.current?.stop(); return; }
+    startListening();
+  };
+
+  const toggleVoiceMode = () => {
+    const next = !voiceMode;
+    setVoiceMode(next);
+    if (!next) {
+      recognitionRef.current?.stop();
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    } else {
+      startListening();
+    }
   };
 
   // ─── Load face-api.js models ──────────────────────────────────────────────
@@ -266,8 +306,7 @@ const Demo = () => {
 
   // ─── Chat ─────────────────────────────────────────────────────────────────
 
-  const sendMessage = async () => {
-    const text = inputText.trim();
+  const sendMessageWithText = async (text: string) => {
     if (!text || chatLoading) return;
 
     setMessages((prev) => [
@@ -280,23 +319,25 @@ const Demo = () => {
     try {
       const clientId = recognitionResult?.matched ? recognitionResult.client?.id : null;
       const response = await chatApi.send(text, clientId, sessionId);
+      const reply = response.reply;
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: response.reply, timestamp: new Date() },
+        { role: "assistant", text: reply, timestamp: new Date() },
       ]);
+      if (voiceModeRef.current) speak(reply);
     } catch {
+      const errMsg = "I'm having trouble connecting to the server. Please make sure the backend is running.";
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          text: "I'm having trouble connecting to the server. Please make sure the backend is running.",
-          timestamp: new Date(),
-        },
+        { role: "assistant", text: errMsg, timestamp: new Date() },
       ]);
+      if (voiceModeRef.current) speak(errMsg);
     } finally {
       setChatLoading(false);
     }
   };
+
+  const sendMessage = () => sendMessageWithText(inputText.trim());
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -551,11 +592,28 @@ const Demo = () => {
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <MessageSquare className="w-5 h-5 text-primary" />
                   Chat with REEB
-                  {recognitionResult?.matched && recognitionResult.client && (
-                    <Badge className="ml-auto bg-primary/20 text-primary border-primary/30 text-xs">
-                      Logged in as {recognitionResult.client.name}
-                    </Badge>
+                  {isSpeaking && (
+                    <span className="flex items-center gap-1 text-xs font-normal text-primary animate-pulse">
+                      <Volume2 className="w-3.5 h-3.5" /> Speaking…
+                    </span>
                   )}
+                  <div className="ml-auto flex items-center gap-2">
+                    {recognitionResult?.matched && recognitionResult.client && (
+                      <Badge className="bg-primary/20 text-primary border-primary/30 text-xs">
+                        {recognitionResult.client.name}
+                      </Badge>
+                    )}
+                    <Button
+                      size="sm"
+                      variant={voiceMode ? "default" : "outline"}
+                      onClick={toggleVoiceMode}
+                      className="flex items-center gap-1.5 text-xs h-7 px-2"
+                      title={voiceMode ? "Turn off voice mode" : "Turn on voice mode — talk to REEB hands-free"}
+                    >
+                      {voiceMode ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                      {voiceMode ? "Voice Off" : "Voice Mode"}
+                    </Button>
+                  </div>
                 </CardTitle>
               </CardHeader>
 
