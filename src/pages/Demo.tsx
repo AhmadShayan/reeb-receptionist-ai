@@ -546,7 +546,11 @@ const Demo = () => {
                           : "bg-secondary text-foreground rounded-bl-sm"
                       }`}
                     >
-                      <p>{msg.text}</p>
+                      <p>{msg.text.split(/(https?:\/\/[^\s]+)/g).map((part, idx) =>
+                        /^https?:\/\//.test(part)
+                          ? <a key={idx} href={part} target="_blank" rel="noopener noreferrer" className="underline font-medium break-all">{part}</a>
+                          : part
+                      )}</p>
                       <p className={`text-xs mt-1 ${msg.role === "user" ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
                         {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </p>
