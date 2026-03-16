@@ -21,6 +21,8 @@ import {
   RefreshCw,
   Clock,
   Building2,
+  Mic,
+  MicOff,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -55,6 +57,36 @@ const Demo = () => {
   const [chatLoading, setChatLoading] = useState(false);
   const [sessionId] = useState(() => `session-${Date.now()}`);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Voice input state
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  const toggleVoiceInput = () => {
+    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    if (isListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+    recognition.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      setInputText(transcript);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
 
   // ─── Load face-api.js models ──────────────────────────────────────────────
 
@@ -581,10 +613,19 @@ const Demo = () => {
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Type your message to REEB…"
+                    placeholder={isListening ? "Listening…" : "Type or speak your message…"}
                     disabled={chatLoading}
-                    className="flex-1"
+                    className={`flex-1 ${isListening ? "border-red-400 focus-visible:ring-red-400" : ""}`}
                   />
+                  <Button
+                    onClick={toggleVoiceInput}
+                    disabled={chatLoading}
+                    size="icon"
+                    variant={isListening ? "destructive" : "outline"}
+                    title={isListening ? "Stop listening" : "Speak"}
+                  >
+                    {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                  </Button>
                   <Button
                     onClick={sendMessage}
                     disabled={!inputText.trim() || chatLoading}
