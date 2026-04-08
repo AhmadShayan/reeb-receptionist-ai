@@ -218,3 +218,32 @@ async def get_ai_response(
     # Rule-based fallback
     bot = RuleBasedReceptionist()
     return bot.get_response(user_message, client_name, history=conversation_history)
+
+
+async def get_ai_greeting(client_name: str, visit_count: int, last_visit: str) -> str:
+    """Generate a personalized welcome greeting via Claude, or fall back to rule-based."""
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+
+    if api_key and ANTHROPIC_AVAILABLE and not api_key.startswith("your_"):
+        try:
+            client = anthropic.Anthropic(api_key=api_key)
+            prompt = (
+                f"Generate a warm, natural, 1-2 sentence welcome-back greeting for a visitor named {client_name}. "
+                f"This is visit number {visit_count}. Last visit: {last_visit}. "
+                f"Be friendly, use their name, mention the visit count or last visit naturally. "
+                f"Do NOT start with 'Certainly', 'Absolutely', or 'Of course'. Be concise."
+            )
+            response = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=100,
+                system=_build_system_prompt(client_name),
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return response.content[0].text
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("Claude greeting error: %s", e)
+
+    # Rule-based fallback
+    bot = RuleBasedReceptionist()
+    return bot.get_recognition_greeting(client_name, visit_count, last_visit)

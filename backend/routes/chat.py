@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from database import get_db
 from models import ChatLog, Client, Meeting
-from services.ai_service import get_ai_response, RuleBasedReceptionist
+from services.ai_service import get_ai_response, get_ai_greeting, RuleBasedReceptionist
 from services.email_service import send_meeting_confirmation
 from typing import Optional
 
@@ -172,8 +172,7 @@ async def get_greeting(
     if client_id:
         client = db.query(Client).filter(Client.id == client_id).first()
         if client:
-            bot = RuleBasedReceptionist()
-            greeting = bot.get_recognition_greeting(
+            greeting = await get_ai_greeting(
                 client.name, visit_count or 0, last_visit or "recently"
             )
             return {"greeting": greeting, "client_name": client.name}
