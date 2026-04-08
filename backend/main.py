@@ -13,13 +13,19 @@ app = FastAPI(title="Agentic REEB AI Backend", version="1.0.0")
 
 _origins = [
     "http://localhost:5173",
+    "http://localhost:5174",
     "http://localhost:3000",
     "http://localhost:8080",
+    "http://localhost:8081",
+    "http://localhost:8082",
     "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:8081",
 ]
-# Allow the deployed Vercel frontend (set FRONTEND_URL env var on Railway)
-if os.getenv("FRONTEND_URL"):
-    _origins.append(os.getenv("FRONTEND_URL"))
+# Allow any extra origins from env (e.g. Vercel deployment URL)
+for _url in filter(None, os.getenv("FRONTEND_URL", "").split(",")):
+    _origins.append(_url.strip())
 
 app.add_middleware(
     CORSMiddleware,
